@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use std::ops::{
     Add,
     AddAssign,
@@ -10,7 +12,6 @@ use std::ops::{
     SubAssign
 };
 
-
 use std::cmp::{
     Eq,
     PartialEq
@@ -22,42 +23,46 @@ use super::Quaternion;
 
 
 
-pub struct Vector<const N: usize> {
-    coordinates: [f64; N],
+pub struct Vector<'a, const N: usize> {
+    coordinates: &'a mut [f64; N],
     norm_value: Remember<f64>
 }
 
 
 
-impl<const N: usize> Vector<N> {
-    pub fn new(coordinates: [f64; N]) -> Vector<N> {
-        let mut out = Vector { coordinates, norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
+impl<'a, const N: usize> Vector<'a, N> {
+    pub fn new(coordinates: [f64; N]) -> Vector<'a, N> {
+        let mut out = Vector { coordinates: &mut coordinates, norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
 
-        let calculate = Box::new(|| out.norm());
+        let coordinates_ref = Rc::new(*out.coordinates);
 
-        out.norm_value = Remember::new(calculate, Some(Vector::<N>::norm_static(coordinates)));
+        let calculate = Box::new(move || Vector::<N>::norm_static(coordinates_ref));
+
+        out.norm_value = Remember::new(calculate, Some(Vector::<N>::norm_static(Rc::new(coordinates))));
 
         out
     }
 
-    fn new_with_norm(coordinates: [f64; N], norm: f64) -> Vector<N> {
-        let mut out = Vector { coordinates, norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
+    fn new_with_norm(coordinates: [f64; N], norm: f64) -> Vector<'a, N> {
+        let mut out = Vector { coordinates: &mut &mut coordinates, norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
 
-        let calculate = Box::new(|| out.norm());
+        let coordinates_ref = Rc::new(*out.coordinates);
 
-        out.norm_value = Remember::new(calculate, Some(Vector::<N>::norm_static(coordinates)));
+        let calculate = Box::new(move || Vector::<N>::norm_static(coordinates_ref));
+
+        out.norm_value = Remember::new(calculate, Some(Vector::<N>::norm_static(Rc::new(coordinates))));
 
         out
     }
 
     pub fn norm(&self) -> f64 {
-        Vector::<N>::norm_static(self.coordinates)
+        Vector::<N>::norm_static(Rc::new(self.coordinates))
     }
 
-    fn norm_static(coordinates: [f64; N]) -> f64 {
-        let norm = 0.0;
+    fn norm_static(coordinates: Rc<[f64; N]>) -> f64 {
+        let mut norm = 0.0;
 
-        for c in coordinates {
+        for c in *coordinates {
             norm += c * c;
         }
 
@@ -67,8 +72,8 @@ impl<const N: usize> Vector<N> {
 
 
 
-impl Vector<3> {
-    pub fn cross(u: Vector<3>, v: Vector<3>) -> Vector<3> {
+impl<'a> Vector<'a, 3> {
+    pub fn cross(u: Vector<3>, v: Vector<3>) -> Vector<'a, 3> {
         let [ux, uy, uz] = u.coordinates;
         let [vx, vy, vz] = v.coordinates;
 
@@ -82,8 +87,8 @@ impl Vector<3> {
 
 
 
-impl<const N: usize> Add for Vector<N> {
-    type Output = Vector<N>;
+impl<'a, const N: usize> Add for Vector<'a, N> {
+    type Output = Vector<'a, N>;
 
     fn add(self, other: Vector<N>) -> Vector<N> {
         let mut coordinates = [0.0; N];
@@ -96,7 +101,7 @@ impl<const N: usize> Add for Vector<N> {
     }
 }
 
-impl<const N: usize> AddAssign for Vector<N> {
+impl<'a, const N: usize> AddAssign for Vector<'a, N> {
     fn add_assign(&mut self, rhs: Self) {
         for i in 0..N {
             self.coordinates[i] += rhs.coordinates[i];
@@ -106,16 +111,16 @@ impl<const N: usize> AddAssign for Vector<N> {
     }
 }
 
-impl<const N: usize> Div<f64> for Vector<N> {
-    type Output = Vector<N>;
+impl<'a, const N: usize> Div<f64> for Vector<'a, N> {
+    type Output = Vector<'a, N>;
 
-    fn div(self, scalar: f64) -> Vector<N> {
+    fn div(self, scalar: f64) -> Vector<'a, N> {
         Vector::new_with_norm(self.coordinates.map(|c| c / scalar), self.norm_value.get_static() / scalar)
     }
 
 }
 
-impl<const N: usize> DivAssign<f64> for Vector<N> {
+impl<'a, const N: usize> DivAssign<f64> for Vector<'a, N> {
     fn div_assign(&mut self, scalar: f64) {
         for i in 0..N {
             self.coordinates[i] /= scalar;
@@ -126,15 +131,15 @@ impl<const N: usize> DivAssign<f64> for Vector<N> {
     }
 }
 
-impl<const N: usize> Mul<f64> for Vector<N> {
-    type Output = Vector<N>;
+impl<'a, const N: usize> Mul<f64> for Vector<'a, N> {
+    type Output = Vector<'a, N>;
 
     fn mul(self, scalar: f64) -> Self::Output {
         Vector::new_with_norm(self.coordinates.map(|c| c * scalar), self.norm_value.get_static() * scalar)
     }
 }
 
-impl<const N: usize> Mul<Vector<N>> for Vector<N> {
+impl<'a, const N: usize> Mul<Vector<'_, N>> for Vector<'a, N> {
     type Output = f64;
 
     fn mul(self, other: Vector<N>) -> f64 {
@@ -148,10 +153,10 @@ impl<const N: usize> Mul<Vector<N>> for Vector<N> {
     }
 }
 
-impl Mul<Quaternion> for Vector<3> {
-    type Output = Vector<3>;
+impl<'a> Mul<Quaternion> for Vector<'a, 3> {
+    type Output = Vector<'a, 3>;
 
-    fn mul(self, other: Quaternion) -> Vector<3> {
+    fn mul(self, other: Quaternion) -> Vector<'a, 3> {
         let (r, i, j, k) = Quaternion::conj(
             (0.0, self.coordinates[0], self.coordinates[1], self.coordinates[2]),
             other.get()
@@ -161,7 +166,7 @@ impl Mul<Quaternion> for Vector<3> {
     }
 }
 
-impl<const N: usize> MulAssign<f64> for Vector<N> {
+impl<'a, const N: usize> MulAssign<f64> for Vector<'a, N> {
     fn mul_assign(&mut self, scalar: f64) {
         for i in 0..N {
             self.coordinates[i] *= scalar;
@@ -172,28 +177,28 @@ impl<const N: usize> MulAssign<f64> for Vector<N> {
     }
 }
 
-impl MulAssign<Quaternion> for Vector<3> {
+impl<'a> MulAssign<Quaternion> for Vector<'a, 3> {
     fn mul_assign(&mut self, other: Quaternion) {
         let (r, i, j, k) = Quaternion::conj(
             (0.0, self.coordinates[0], self.coordinates[1], self.coordinates[2]),
             other.get()
         );
 
-        self.coordinates = [i, j, k];
+        self.coordinates = &mut [i, j, k];
         self.norm_value.stale = true;
     }
 }
 
-impl<const N: usize> Neg for Vector<N> {
-    type Output = Vector<N>;
+impl<'a, const N: usize> Neg for Vector<'a, N> {
+    type Output = Vector<'a, N>;
 
-    fn neg(self) -> Vector<N> {
+    fn neg(self) -> Vector<'a, N> {
         Vector::new_with_norm(self.coordinates.map(|c| -c), self.norm_value.get_static())
     }
 }
 
-impl<const N: usize> Sub for Vector<N> {
-    type Output = Vector<N>;
+impl<'a, const N: usize> Sub for Vector<'a, N> {
+    type Output = Vector<'a, N>;
 
     fn sub(self, other: Vector<N>) -> Vector<N> {
         let mut coordinates = [0.0; N];
@@ -207,7 +212,7 @@ impl<const N: usize> Sub for Vector<N> {
 
 }
 
-impl<const N: usize> SubAssign for Vector<N> {
+impl<'a, const N: usize> SubAssign for Vector<'a, N> {
     fn sub_assign(&mut self, other: Vector<N>) {
         for i in 0..N {
             self.coordinates[i] -= other.coordinates[i];
@@ -219,9 +224,9 @@ impl<const N: usize> SubAssign for Vector<N> {
 
 
 
-impl<const N: usize> Eq for Vector<N> {}
+impl<'a, const N: usize> Eq for Vector<'a, N> {}
 
-impl<const N: usize> PartialEq for Vector<N> {
+impl<'a, const N: usize> PartialEq for Vector<'a, N> {
     fn eq(&self, other: &Self) -> bool {
         for i in 0..N {
             if self.coordinates[i] != other.coordinates[i] {
