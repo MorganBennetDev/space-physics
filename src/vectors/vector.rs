@@ -10,6 +10,12 @@ use std::ops::{
     SubAssign
 };
 
+
+use std::cmp::{
+    Eq,
+    PartialEq
+};
+
 use crate::util::Remember;
 
 use super::Quaternion;
@@ -208,5 +214,21 @@ impl<const N: usize> SubAssign for Vector<N> {
         }
 
         self.norm_value.stale = true;
+    }
+}
+
+
+
+impl<const N: usize> Eq for Vector<N> {}
+
+impl<const N: usize> PartialEq for Vector<N> {
+    fn eq(&self, other: &Self) -> bool {
+        for i in 0..N {
+            if self.coordinates[i] != other.coordinates[i] {
+                return false;
+            }
+        }
+
+        true
     }
 }
