@@ -53,6 +53,14 @@ impl Vec3 {
     pub fn norm(&mut self) -> f64 {
         self.norm_value.get()
     }
+
+    pub fn cross(u: Vec3, v: Vec3) -> Vec3 {
+        let x = u.y * v.z - u.z * v.y;
+        let y = u.z * v.x - u.x * v.z;
+        let z = u.x * v.y - u.y * v.x;
+
+        Vec3::new(x, y, z)
+    }
 }
 
 
