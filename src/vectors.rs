@@ -1,5 +1,5 @@
 mod quaternion;
-mod vec3;
+mod vector;
 
 pub type Quaternion = quaternion::Quaternion;
-pub type Vec3 = vec3::Vec3;
+pub type Vector<const N: usize> = vector::Vector<N>;
