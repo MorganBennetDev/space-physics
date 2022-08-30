@@ -12,6 +12,8 @@ use std::ops::{
 
 use crate::util::Remember;
 
+use super::Quaternion;
+
 
 
 pub struct Vec3 {
@@ -108,6 +110,19 @@ impl Mul<Vec3> for Vec3 {
     }
 }
 
+impl Mul<Quaternion> for Vec3 {
+    type Output = Vec3;
+
+    fn mul(self, other: Quaternion) -> Vec3 {
+        let (r, i, j, k) = Quaternion::conj(
+            (0.0, self.x, self.y, self.z),
+            other.get()
+        );
+
+        Vec3::new(i, j, k)
+    }
+}
+
 impl MulAssign<f64> for Vec3 {
     fn mul_assign(&mut self, scalar: f64) {
         self.x *= scalar;
@@ -116,6 +131,20 @@ impl MulAssign<f64> for Vec3 {
 
         let norm = self.norm();
         self.norm_value.set(norm * scalar);
+    }
+}
+
+impl MulAssign<Quaternion> for Vec3 {
+    fn mul_assign(&mut self, other: Quaternion) {
+        let (r, i, j, k) = Quaternion::conj(
+            (0.0, self.x, self.y, self.z),
+            other.get()
+        );
+
+        self.x = i;
+        self.y = j;
+        self.z = k;
+        self.norm_value.stale = true;
     }
 }
 
