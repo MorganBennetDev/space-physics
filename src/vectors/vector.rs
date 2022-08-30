@@ -17,12 +17,15 @@ use std::cmp::{
 
 use crate::util::Remember;
 
-use super::Quaternion;
+use crate::vectors::{
+    AbstractVector,
+    Quaternion
+};
 
 
 
 pub struct Vector<const N: usize> {
-    coordinates: [f64; N],
+    vec: AbstractVector<N>,
     norm_value: Remember<f64>
 }
 
@@ -30,19 +33,27 @@ pub struct Vector<const N: usize> {
 
 impl<const N: usize> Vector<N> {
     pub fn new(coordinates: [f64; N]) -> Vector<N> {
-        let mut out = Vector { coordinates: coordinates.clone(), norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
+        Vector::new_from_abstract_vector(AbstractVector::new(coordinates))
+    }
 
-        let calculate = Box::new(move || Vector::<N>::norm_static(&out.coordinates));
+    fn new_with_norm(coordinates: [f64; N], norm: f64) -> Vector<N> {
+        Vector::new_from_abstract_vector_with_norm(AbstractVector::new(coordinates), norm)
+    }
 
-        out.norm_value = Remember::new(calculate, Some(Vector::<N>::norm_static(&coordinates)));
+    fn new_from_abstract_vector(vec: AbstractVector<N>) -> Vector<N> {
+        let mut out = Vector { vec: vec.clone(), norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
+
+        let calculate = Box::new(move || AbstractVector::<N>::norm_static(&out.vec));
+
+        out.norm_value = Remember::new(calculate, Some(AbstractVector::<N>::norm_static(&out.vec)));
 
         out
     }
 
-    fn new_with_norm(coordinates: [f64; N], norm: f64) -> Vector<N> {
-        let mut out = Vector { coordinates: coordinates.clone(), norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
+    fn new_from_abstract_vector_with_norm(vec: AbstractVector<N>, norm: f64) -> Vector<N> {
+        let mut out = Vector { vec: vec.clone(), norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
 
-        let calculate = Box::new(move || Vector::<N>::norm_static(&out.coordinates));
+        let calculate = Box::new(move || AbstractVector::<N>::norm_static(&out.vec));
 
         out.norm_value = Remember::new(calculate, Some(norm));
 
@@ -50,17 +61,7 @@ impl<const N: usize> Vector<N> {
     }
 
     pub fn norm(&self) -> f64 {
-        Vector::<N>::norm_static(&self.coordinates)
-    }
-
-    fn norm_static(coordinates: &[f64; N]) -> f64 {
-        let mut norm = 0.0;
-
-        for c in *coordinates {
-            norm += c * c;
-        }
-
-        norm.sqrt()
+        self.vec.norm()
     }
 }
 
@@ -68,8 +69,8 @@ impl<const N: usize> Vector<N> {
 
 impl Vector<3> {
     pub fn cross(u: Vector<3>, v: Vector<3>) -> Vector<3> {
-        let [ux, uy, uz] = u.coordinates;
-        let [vx, vy, vz] = v.coordinates;
+        let [ux, uy, uz] = u.vec.entries();
+        let [vx, vy, vz] = v.vec.entries();
 
         let x = ux * vz - uz * vy;
         let y = uz * vx - ux * vz;
@@ -85,21 +86,13 @@ impl<const N: usize> Add for Vector<N> {
     type Output = Vector<N>;
 
     fn add(self, other: Vector<N>) -> Vector<N> {
-        let mut coordinates = [0.0; N];
-
-        for i in 0..N {
-            coordinates[i] = self.coordinates[i] + other.coordinates[i];
-        }
-
-        Vector::new(coordinates)
+        Vector::new((self.vec + other.vec).entries().clone())
     }
 }
 
 impl<const N: usize> AddAssign for Vector<N> {
     fn add_assign(&mut self, rhs: Self) {
-        for i in 0..N {
-            self.coordinates[i] += rhs.coordinates[i];
-        }
+        self.vec += rhs.vec;
 
         self.norm_value.stale = true;
     }
@@ -109,16 +102,14 @@ impl<const N: usize> Div<f64> for Vector<N> {
     type Output = Vector<N>;
 
     fn div(self, scalar: f64) -> Vector<N> {
-        Vector::new_with_norm(self.coordinates.map(|c| c / scalar), self.norm_value.get_static() / scalar)
+        Vector::new_with_norm(self.vec.entries().clone(), self.norm() / scalar)
     }
 
 }
 
 impl<const N: usize> DivAssign<f64> for Vector<N> {
     fn div_assign(&mut self, scalar: f64) {
-        for i in 0..N {
-            self.coordinates[i] /= scalar;
-        }
+        self.vec /= scalar;
 
         let norm = self.norm();
         self.norm_value.set(norm / scalar);
@@ -129,7 +120,7 @@ impl<const N: usize> Mul<f64> for Vector<N> {
     type Output = Vector<N>;
 
     fn mul(self, scalar: f64) -> Self::Output {
-        Vector::new_with_norm(self.coordinates.map(|c| c * scalar), self.norm_value.get_static() * scalar)
+        Vector::new_with_norm(self.vec.entries().clone(), self.norm() * scalar)
     }
 }
 
@@ -137,13 +128,7 @@ impl<const N: usize> Mul<Vector<N>> for Vector<N> {
     type Output = f64;
 
     fn mul(self, other: Vector<N>) -> f64 {
-        let mut out = 0.0;
-
-        for i in 0..N {
-            out += self.coordinates[i] * other.coordinates[i];
-        }
-
-        out
+        self.vec * other.vec
     }
 }
 
@@ -151,20 +136,18 @@ impl Mul<Quaternion> for Vector<3> {
     type Output = Vector<3>;
 
     fn mul(self, other: Quaternion) -> Vector<3> {
-        let (r, i, j, k) = Quaternion::conj(
-            (0.0, self.coordinates[0], self.coordinates[1], self.coordinates[2]),
-            other.get()
+        let c = Quaternion::conj(
+            AbstractVector::new([0.0, self.vec[0], self.vec[1], self.vec[2]]),
+            *other.get()
         );
 
-        Vector::new([i, j, k])
+        Vector::new([c[1], c[2], c[3]])
     }
 }
 
 impl<const N: usize> MulAssign<f64> for Vector<N> {
     fn mul_assign(&mut self, scalar: f64) {
-        for i in 0..N {
-            self.coordinates[i] *= scalar;
-        }
+        self.vec *= scalar;
 
         let norm = self.norm();
         self.norm_value.set(norm * scalar);
@@ -173,12 +156,12 @@ impl<const N: usize> MulAssign<f64> for Vector<N> {
 
 impl MulAssign<Quaternion> for Vector<3> {
     fn mul_assign(&mut self, other: Quaternion) {
-        let (r, i, j, k) = Quaternion::conj(
-            (0.0, self.coordinates[0], self.coordinates[1], self.coordinates[2]),
-            other.get()
+        let c = Quaternion::conj(
+            AbstractVector::new([0.0, self.vec[0], self.vec[1], self.vec[2]]),
+            *other.get()
         );
 
-        self.coordinates = [i, j, k];
+        self.vec = AbstractVector::new([c[1], c[2], c[3]]);
         self.norm_value.stale = true;
     }
 }
@@ -187,7 +170,7 @@ impl<const N: usize> Neg for Vector<N> {
     type Output = Vector<N>;
 
     fn neg(self) -> Vector<N> {
-        Vector::new_with_norm(self.coordinates.map(|c| -c), self.norm_value.get_static())
+        Vector::new_with_norm(self.vec.entries().clone(), self.norm())
     }
 }
 
@@ -195,22 +178,14 @@ impl<const N: usize> Sub for Vector<N> {
     type Output = Vector<N>;
 
     fn sub(self, other: Vector<N>) -> Vector<N> {
-        let mut coordinates = [0.0; N];
-
-        for i in 0..N {
-            coordinates[i] = self.coordinates[i] - other.coordinates[i];
-        }
-
-        Vector::new(coordinates)
+        Vector::new((self.vec - other.vec).entries().clone())
     }
 
 }
 
 impl<const N: usize> SubAssign for Vector<N> {
     fn sub_assign(&mut self, other: Vector<N>) {
-        for i in 0..N {
-            self.coordinates[i] -= other.coordinates[i];
-        }
+        self.vec -= other.vec;
 
         self.norm_value.stale = true;
     }
@@ -223,7 +198,7 @@ impl<const N: usize> Eq for Vector<N> {}
 impl<const N: usize> PartialEq for Vector<N> {
     fn eq(&self, other: &Self) -> bool {
         for i in 0..N {
-            if self.coordinates[i] != other.coordinates[i] {
+            if self.vec[i] != other.vec[i] {
                 return false;
             }
         }
