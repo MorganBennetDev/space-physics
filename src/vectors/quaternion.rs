@@ -11,8 +11,6 @@ use std::ops::{
     SubAssign
 };
 
-use crate::util::Remember;
-
 use crate::vectors::{
     AbstractVector
 };
@@ -20,8 +18,7 @@ use crate::vectors::{
 
 
 pub struct Quaternion {
-    vec: AbstractVector<4>,
-    norm_value: Remember<f64>
+    vec: AbstractVector<4>
 }
 
 
@@ -54,21 +51,9 @@ impl Quaternion {
 
 
     pub fn new(r: f64, i: f64, j: f64, k: f64) -> Quaternion {
-        let mut out = Quaternion { vec: AbstractVector::new([r, i, j, k]), norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
+        let mut out = Quaternion { vec: AbstractVector::new([r, i, j, k]) };
 
         let calculate = Box::new(move || AbstractVector::<4>::norm_static(&out.vec));
-
-        out.norm_value = Remember::new(calculate, Some(AbstractVector::<4>::norm_static(&out.vec)));
-
-        out
-    }
-
-    pub fn new_with_norm(r: f64, i: f64, j: f64, k: f64, norm: f64) -> Quaternion {
-        let mut out = Quaternion { vec: AbstractVector::new([r, i, j, k]), norm_value: Remember::new(Box::new(|| { 0.0 }), Some(0.0)) };
-
-        let calculate = Box::new(move || AbstractVector::<4>::norm_static(&out.vec));
-
-        out.norm_value = Remember::new(calculate, Some(norm));
 
         out
     }
@@ -77,12 +62,6 @@ impl Quaternion {
         let [r, i, j, k] = vec.entries();
 
         Quaternion::new(*r, *i, *j, *k)
-    }
-
-    fn new_from_abstract_vector_with_norm(vec: AbstractVector<4>, norm: f64) -> Quaternion {
-        let [r, i, j, k] = vec.entries();
-
-        Quaternion::new_with_norm(*r, *i, *j, *k, norm)
     }
 
     pub fn new_from_axis_angle(axis: (f64, f64, f64), angle: f64) -> Quaternion {
@@ -105,7 +84,7 @@ impl Quaternion {
 
 
     pub fn norm(&mut self) -> f64 {
-        self.norm_value.get_static()
+        self.vec.norm()
     }
 
     pub fn get(&self) -> &AbstractVector<4> {
@@ -114,16 +93,14 @@ impl Quaternion {
 
     pub fn set(&mut self, q: AbstractVector<4>) {
         self.vec = q.clone();
-        self.norm_value.stale = true;
     }
 
     pub fn inverse(&self) -> Quaternion {
-        Quaternion::new_from_abstract_vector_with_norm(Quaternion::inv(self.vec), 1.0 / self.norm_value.get_static())
+        Quaternion::new_from_abstract_vector(Quaternion::inv(self.vec))
     }
 
     pub fn invert(&mut self) {
         self.vec = Quaternion::inv(self.vec);
-        self.norm_value.set(1.0 / self.norm_value.get_static());
     }
 }
 
@@ -140,7 +117,6 @@ impl Add for Quaternion {
 impl AddAssign for Quaternion {
     fn add_assign(&mut self, rhs: Self) {
         self.vec += rhs.vec;
-        self.norm_value.stale = true;
     }
 }
 
@@ -148,14 +124,13 @@ impl Div<f64> for Quaternion {
     type Output = Quaternion;
 
     fn div(self, scalar: f64) -> Quaternion {
-        Quaternion::new_from_abstract_vector_with_norm(self.vec / scalar, self.norm_value.get_static() / scalar)
+        Quaternion::new_from_abstract_vector(self.vec / scalar)
     }
 }
 
 impl DivAssign<f64> for Quaternion {
     fn div_assign(&mut self, scalar: f64) {
         self.vec /= scalar;
-        self.norm_value.set(self.norm_value.get_static() / scalar);
     }
 }
 
@@ -163,7 +138,7 @@ impl Mul<f64> for Quaternion {
     type Output = Quaternion;
 
     fn mul(self, scalar: f64) -> Quaternion {
-        Quaternion::new_from_abstract_vector_with_norm(self.vec * scalar, self.norm_value.get_static() * scalar)
+        Quaternion::new_from_abstract_vector(self.vec * scalar)
     }
 }
 
@@ -171,20 +146,18 @@ impl Mul<Quaternion> for Quaternion {
     type Output = Quaternion;
 
     fn mul(self, other: Quaternion) -> Quaternion {
-        Quaternion::new_from_abstract_vector_with_norm(Quaternion::mul(self.vec, other.vec), self.norm_value.get_static() * other.norm_value.get_static())
+        Quaternion::new_from_abstract_vector(Quaternion::mul(self.vec, other.vec))
     }
 }
 
 impl MulAssign<f64> for Quaternion {
     fn mul_assign(&mut self, scalar: f64) {
         self.vec *= scalar;
-        self.norm_value.set(self.norm_value.get_static() * scalar);
     }
 }
 
 impl MulAssign<Quaternion> for Quaternion {
     fn mul_assign(&mut self, rhs: Self) {
-        self.norm_value.set(self.norm_value.get_static() * rhs.norm_value.get_static());
         self.vec = Quaternion::mul(self.vec, rhs.vec);
     }
 }
@@ -193,7 +166,7 @@ impl Neg for Quaternion {
     type Output = Quaternion;
 
     fn neg(self) -> Quaternion {
-        Quaternion::new_from_abstract_vector_with_norm(-self.vec, self.norm_value.get_static())
+        Quaternion::new_from_abstract_vector(-self.vec)
     }
 }
 
@@ -201,12 +174,11 @@ impl Not for Quaternion {
     type Output = Quaternion;
 
     fn not(self) -> Quaternion {
-        Quaternion::new_with_norm(
+        Quaternion::new(
             self.vec[0],
             -self.vec[1],
             -self.vec[2],
-            -self.vec[3],
-            self.norm_value.get_static()
+            -self.vec[3]
         )
     }
 }
@@ -222,6 +194,5 @@ impl Sub for Quaternion {
 impl SubAssign for Quaternion {
     fn sub_assign(&mut self, rhs: Self) {
         self.vec -= rhs.vec;
-        self.norm_value.stale = true;
     }
 }
