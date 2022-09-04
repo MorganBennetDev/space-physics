@@ -7,7 +7,9 @@ use std::ops::{
     MulAssign,
     Neg,
     Sub,
-    SubAssign
+    SubAssign,
+    Index,
+    IndexMut
 };
 
 use std::cmp::{
@@ -21,7 +23,7 @@ use crate::vectors::{
 };
 
 
-
+#[derive(Copy, Clone)]
 pub struct Vector<const N: usize> {
     vec: AbstractVector<N>
 }
@@ -162,6 +164,22 @@ impl<const N: usize> Sub for Vector<N> {
 impl<const N: usize> SubAssign for Vector<N> {
     fn sub_assign(&mut self, other: Vector<N>) {
         self.vec -= other.vec;
+    }
+}
+
+
+
+impl<const N: usize> Index<usize> for Vector<N> {
+    type Output = f64;
+
+    fn index(&self, index: usize) -> &f64 {
+        &self.vec[index]
+    }
+}
+
+impl<const N: usize> IndexMut<usize> for Vector<N> {
+    fn index_mut(&mut self, index: usize) -> &mut f64 {
+        &mut self.vec[index]
     }
 }
 
