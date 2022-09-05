@@ -1,4 +1,4 @@
-mod vectors;
+mod linear_algebra;
 mod polytopes;
 
 

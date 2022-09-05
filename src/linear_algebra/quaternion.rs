@@ -11,7 +11,7 @@ use std::ops::{
     SubAssign
 };
 
-use crate::vectors::{
+use crate::linear_algebra::{
     AbstractVector
 };
 

@@ -17,7 +17,7 @@ use std::cmp::{
     PartialEq
 };
 
-use crate::vectors::{
+use crate::linear_algebra::{
     AbstractVector,
     Quaternion
 };
